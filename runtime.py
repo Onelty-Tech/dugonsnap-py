@@ -1,46 +1,38 @@
+from websockets.legacy.server import WebSocketServerProtocol
 import websockets
-import errno
-from collections import deque
 
 
 class Runtime:
-    def __init__(self,address,port):
+    def __init__(self, address: str, port: int):
         self.address = address
         self.port = port
-        # solo puede haber uno escuchando el puerto del websockets que ese es el runtime, ya vere si se necesita mas conexiones.
-        self.clients = set()
-    async def Establish(self):
-        # iniciamos el servidor websockets
+        self.client: WebSocketServerProtocol = None
+    
+    async def Establish(self) -> None:
         try:
             server = await websockets.serve(
-                self.handlingRuntime,
+                self.handler,
                 self.address,
                 self.port,
                 ping_interval=20,
                 ping_timeout=20
             )
-            # manejamos los respectivos errores.
+            print(f"Servidor WebSocket establecido en ws://{self.address}:{self.port}")
+            print("Esperando conexiones...")
+            await server.wait_closed()
         except OSError as e:
-            if e.errno == errno.EADDRINUSE:
-                pass
-            elif e.errno == errno.EADDRNOTAVAIL:
-                pass
-            elif e.errno == errno.EACCES:
-                pass
-            elif e.errno == errno.EAFNOSUPPORT:
-                pass
-        # indicamos que esta funcionando
-        print(f"Servidor WebSocket establecido en ws://{self.ip}:{self.port}")
-        print("Esperando conexiones...")
-        # mantenemos el servidor corriendo con await
-        await server.wait_closed()
-    async def handlingRuntime(self,ws):
-        self.clients.add(ws)
-        clientId = id(ws)
+            print(f"error Runtime.Establish: {e}")
+    async def handler(self, ws: WebSocketServerProtocol) -> None:
         try:
-            print(f"Client {clientId}correctly connected.")
+            if self.client != None:
+                self.client = ws
+                print("Runtime orrectly connected.")
+                return
+            # Como ya tiene conectado al runtime entonces cierra la conexion.
+            ws.close()
         except websockets.exceptions.ConnectionClosed:
-            print(f"Customer {clientId} disconnected")
-        finally:
-            # removemos el cliente al final de la conexion por cualquier error imprevisto
-            self.clients.remove(ws)
+            self.client = None
+            print(f"Runtime disconnected")
+    async def SendPacket(self,parameters: list[bytes],data: list[bytes]):
+        #testing
+        await self.client.send(f"{len(parameters)}\n{data}\n")
